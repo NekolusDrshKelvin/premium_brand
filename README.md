@@ -7,14 +7,15 @@ A quiet-luxury storefront starter for a premium leather goods brand.
 - Styling: Tailwind CSS
 - API: Node.js + Express + TypeScript
 - Database: PostgreSQL + Prisma ORM
+- Authentication: bcrypt password hashes, signed JWT in an HTTP-only cookie, role-checked admin endpoints
 
 ## Repository layout
 ```
 apps/
-  store/                 Next.js storefront
+  store/                 Next.js storefront and admin UI
   api/                   Express REST API
     prisma/schema.prisma PostgreSQL commerce schema
-    prisma/seed.ts       Starter catalog seed
+    prisma/seed.ts       Catalog seed and optional admin provisioning
 docs/
 docker-compose.yml
 ```
@@ -22,48 +23,83 @@ docker-compose.yml
 ## Requirements
 - Node.js 20.9+
 - npm 10+
-- Docker Desktop (for the included local PostgreSQL setup)
+- Docker Desktop
 
-## Start PostgreSQL
+## 1. Start PostgreSQL
 From the repository root:
 ```powershell
 docker compose up -d postgres
 ```
 
-## Run the API
+## 2. Configure and run the API
 ```powershell
 cd apps/api
 npm install
 Copy-Item .env.example .env
+```
+
+Edit `apps/api/.env` before starting:
+- Set `JWT_SECRET` to a unique random secret of at least 32 characters.
+- Set `ADMIN_EMAIL` and `ADMIN_PASSWORD`; the password must be at least 12 characters.
+- Keep the admin password private and do not commit `.env`.
+
+Generate a secret in PowerShell:
+```powershell
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+Then run:
+```powershell
 npm run db:generate
 npm run db:migrate
 npm run db:seed
 npm run dev
 ```
-API health: http://localhost:4000/api/health  
-Product list: http://localhost:4000/api/products
 
-## Run the storefront
+API health: http://localhost:4000/api/health  
+Public product API: http://localhost:4000/api/products
+
+## 3. Configure and run the storefront
 Open a second terminal:
 ```powershell
 cd apps/store
 npm install
+Copy-Item .env.example .env.local
 npm run dev
 ```
 Open http://localhost:3000.
 
-## Current functionality
-- Responsive premium storefront landing page and collection presentation.
-- Database-backed product listing, search, category filter, featured filter, and product detail API.
-- PostgreSQL models for users, products, orders, and order items.
-- Checkout API validates input, calculates totals using database prices, and decrements stock in a database transaction.
+## Admin access
+Open http://localhost:3000/admin/login and sign in using the `ADMIN_EMAIL` and `ADMIN_PASSWORD` values provisioned by the seed script.
+
+The dashboard includes:
+- Overview metrics, recent orders, and low-stock alerts.
+- Create products, edit price/stock, and archive products.
+- Review orders and update fulfillment status.
+- Sign out and role-checked dashboard access.
+
+Admin accounts are created from the server-side seed configuration. Public registration always creates a CUSTOMER account; it cannot grant admin access.
+
+## Implemented API endpoints
+- `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `GET /api/products`
+- `GET /api/products/:slug`
+- `POST /api/orders`
+- `GET /api/admin/overview` (ADMIN)
+- `GET /api/admin/products` (ADMIN)
+- `POST /api/admin/products` (ADMIN)
+- `PATCH /api/admin/products/:id` (ADMIN)
+- `DELETE /api/admin/products/:id` (ADMIN; archives the product)
+- `GET /api/admin/orders` (ADMIN)
+- `PATCH /api/admin/orders/:id/status` (ADMIN)
 
 ## Important production limitations
-This is an in-progress starter, not a finished production ecommerce platform. Customer/admin authentication, protected admin CRUD, payment provider integration, persistent storefront cart/checkout UI, email notifications, automated tests, and deployment configuration still need implementation and verification. Do not use for real customer payments until those controls are completed.
-
-## Environment
-Copy `.env.example` to `.env`. Never commit secrets. Change the local sample database password before exposing any database outside your development machine.
+This is an in-progress starter, not a finished production ecommerce platform. The storefront's public product cards are still static, and the customer cart/checkout UI, password reset, payment provider integration, email notifications, audit logs, automated tests, and deployment configuration need further implementation and verification. Do not use for real customer payments until those controls are completed.
 
 ## Documentation
 - [Architecture](docs/architecture.md)
-- [Deployment checklist](docs/deployment.md)
+- [Deployment guide](docs/deployment.md)
