@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -483,8 +484,9 @@ app.get("/api/orders/:orderNumber/payment", async (req, res, next) => {
 
     if (payment.status === "PENDING" && mmpayClient) {
       try {
-        const providerResult = await mmpayClient.get({ orderId: payment.providerOrderId });
-        const accepted = await applyMmpayTransaction(providerResult as MmpayTransaction);
+        const providerResult = await mmpayClient.get({ orderId: payment.providerOrderId, nonce: randomUUID() });
+        // The provider SDK omits currency from status responses; its MMQR API only supports MMK transactions.
+        const accepted = await applyMmpayTransaction({ ...providerResult, currency: "MMK" } as MmpayTransaction);
         if (accepted) {
           payment = await prisma.paymentTransaction.findUnique({
             where: { id: payment.id },
