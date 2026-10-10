@@ -7,6 +7,7 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 import { OrderStatus, PaymentMethod, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { checkoutPayloadSchema } from "./checkout-validation";
+import { canTransitionPaymentStatus, createMmpayClient, isMmpayConfigured, normalizeMmpayStatus, validateMmpayTransaction, type MmpayTransaction } from "./mmqr";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -27,7 +28,7 @@ app.use(cors({
   origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:3000",
   credentials: true,
 }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "1mb", verify: (req, _res, buffer) => { (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
 app.use(cookieParser());
 
 const authCookieOptions = () => ({
@@ -286,11 +287,76 @@ app.patch("/api/admin/orders/:id/status", requireAuth, requireAdmin, async (req,
   }
 });
 
+async function applyMmpayTransaction(transaction: MmpayTransaction): Promise<boolean> {
+  const payment = await prisma.paymentTransaction.findUnique({
+    where: { providerOrderId: transaction.orderId },
+    include: { order: true },
+  });
+  if (!payment) return false;
+  const expectedAmount = Number(payment.amount);
+  if (!validateMmpayTransaction(transaction, {
+    orderId: payment.providerOrderId,
+    amount: expectedAmount,
+    currency: payment.currency,
+  })) {
+    console.warn("Rejected MMQR transaction with mismatched order, amount, currency, or status.");
+    return false;
+  }
+  const nextStatus = normalizeMmpayStatus(transaction.status);
+  if (!nextStatus) return false;
+  if (!canTransitionPaymentStatus(payment.status, nextStatus)) return true;
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.paymentTransaction.findUnique({ where: { id: payment.id } });
+    if (!current || !canTransitionPaymentStatus(current.status, nextStatus)) return;
+    await tx.paymentTransaction.update({
+      where: { id: current.id },
+      data: {
+        status: nextStatus,
+        ...(transaction.transactionRefId ? { transactionRefId: transaction.transactionRefId } : {}),
+        ...(transaction.vendorQrRefId ? { vendorQrRefId: transaction.vendorQrRefId } : {}),
+        ...(transaction.vendor ? { vendor: transaction.vendor } : {}),
+        ...(transaction.method ? { method: transaction.method } : {}),
+        callbackReceivedAt: new Date(),
+      },
+    });
+    await tx.order.update({
+      where: { id: current.orderId },
+      data: {
+        paymentStatus: nextStatus,
+        ...(nextStatus === "PAID" ? { status: OrderStatus.CONFIRMED } : {}),
+      },
+    });
+  });
+  return true;
+}
+
+let mmpayClient: ReturnType<typeof createMmpayClient> | null = null;
+if (isMmpayConfigured()) {
+  try {
+    mmpayClient = createMmpayClient();
+    const handleVerifiedEvent = (transaction: MmpayTransaction) => {
+      void applyMmpayTransaction(transaction).catch((error) => console.error("MMQR event reconciliation failed:", error));
+    };
+    mmpayClient.onTxSuccess(handleVerifiedEvent);
+    mmpayClient.onTxFail(handleVerifiedEvent);
+    mmpayClient.onTxRefund(handleVerifiedEvent);
+    mmpayClient.onTxCancel(handleVerifiedEvent);
+    mmpayClient.onTxExpire(handleVerifiedEvent);
+    mmpayClient.onHeartbeat(handleVerifiedEvent);
+  } catch (error) {
+    console.error("MMQR configuration could not be initialized. MMQR checkout will remain unavailable.", error);
+  }
+}
+
 app.post("/api/orders", async (req, res, next) => {
   const parsed = checkoutSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid checkout details", details: parsed.error.flatten() });
+  const input = parsed.data;
+  if (input.paymentMethod === PaymentMethod.MMQR && (!mmpayClient || !isMmpayConfigured())) {
+    return res.status(503).json({ error: "MMQR is not configured yet. Please choose another payment method or contact the store." });
+  }
   try {
-    const input = parsed.data;
     const order = await prisma.$transaction(async (tx) => {
       const requested = new Map<string, number>();
       for (const item of input.items) requested.set(item.productId, (requested.get(item.productId) ?? 0) + item.quantity);
@@ -306,6 +372,10 @@ app.post("/api/orders", async (req, res, next) => {
         const lineTotal = product.price.mul(quantity);
         subtotal = subtotal.add(lineTotal);
         orderItems.push({ product: { connect: { id: product.id } }, productName: product.name, unitPrice: product.price, quantity, lineTotal });
+      }
+      if (input.paymentMethod === PaymentMethod.MMQR) {
+        if (products.some((product) => product.currency !== "MMK")) throw new Error("CHECKOUT_MMQR_REQUIRES_MMK");
+        if (!Number.isInteger(Number(subtotal.toString()))) throw new Error("CHECKOUT_MMQR_INTEGER_AMOUNT");
       }
       for (const [productId, quantity] of requested) {
         const changed = await tx.product.updateMany({
@@ -335,11 +405,119 @@ app.post("/api/orders", async (req, res, next) => {
         include: { items: true },
       });
     });
-    return res.status(201).json({ data: order });
+
+    if (input.paymentMethod !== PaymentMethod.MMQR) {
+      return res.status(201).json({ data: order });
+    }
+
+    const amount = Number(order.total);
+    const payment = await prisma.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: "MYANMYANPAY",
+        providerOrderId: order.orderNumber,
+        amount: new Prisma.Decimal(order.total.toString()),
+        currency: "MMK",
+        status: "PENDING",
+      },
+    });
+    try {
+      const items = order.items.map((item) => ({
+        name: item.productName.slice(0, 100),
+        amount: Number(item.unitPrice),
+        quantity: item.quantity,
+      }));
+      const gatewayResponse = await mmpayClient!.pay({
+        orderId: order.orderNumber,
+        amount,
+        currency: "MMK",
+        callbackUrl: process.env.MMPAY_CALLBACK_URL,
+        customMessage: `Order ${order.orderNumber}`.slice(0, 150),
+        items,
+      });
+      if (!gatewayResponse || typeof gatewayResponse.qr !== "string" || gatewayResponse.qr.length < 10) {
+        throw new Error("MMQR provider did not return a usable QR payload.");
+      }
+      const updatedPayment = await prisma.paymentTransaction.update({
+        where: { id: payment.id },
+        data: { qrPayload: gatewayResponse.qr },
+      });
+      return res.status(201).json({
+        data: order,
+        payment: { provider: "MYANMYANPAY", status: updatedPayment.status, qrPayload: updatedPayment.qrPayload },
+      });
+    } catch (gatewayError) {
+      // Keep the order and stock reservation pending if the provider timed out: the gateway may have
+      // accepted the request before the network failed. Reconcile through the provider/admin before retrying.
+      console.error("MMQR payment creation did not return a confirmed QR response for order", order.orderNumber, gatewayError);
+      return res.status(502).json({
+        error: "The MMQR provider did not confirm QR creation. Your order is pending reconciliation; please contact the store before retrying.",
+        orderNumber: order.orderNumber,
+      });
+    }
   } catch (error) {
     if (error instanceof Error && error.message === "CHECKOUT_PRODUCT_NOT_FOUND") return res.status(400).json({ error: "One or more products are unavailable." });
+    if (error instanceof Error && error.message === "CHECKOUT_MMQR_REQUIRES_MMK") return res.status(400).json({ error: "MMQR checkout requires all selected products to be priced in MMK. Update product currency and prices in the admin catalog first." });
+    if (error instanceof Error && error.message === "CHECKOUT_MMQR_INTEGER_AMOUNT") return res.status(400).json({ error: "MMQR checkout requires a whole-number MMK total." });
     if (error instanceof Error && (error.message.startsWith("CHECKOUT_STOCK:") || error.message === "CHECKOUT_STOCK_CHANGED")) return res.status(409).json({ error: "Insufficient stock for one or more items." });
     return next(error);
+  }
+});
+
+// Public order status is gated by both the unpredictable order number and the customer's email.
+// The provider status query is used as a second source of truth while the payment is still pending.
+app.get("/api/orders/:orderNumber/payment", async (req, res, next) => {
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "A valid checkout email is required." });
+  }
+  try {
+    let payment = await prisma.paymentTransaction.findUnique({
+      where: { providerOrderId: req.params.orderNumber },
+      include: { order: true },
+    });
+    if (!payment || payment.order.customerEmail !== email) return res.status(404).json({ error: "Payment record not found." });
+
+    if (payment.status === "PENDING" && mmpayClient) {
+      try {
+        const providerResult = await mmpayClient.get({ orderId: payment.providerOrderId });
+        const accepted = await applyMmpayTransaction(providerResult as MmpayTransaction);
+        if (accepted) {
+          payment = await prisma.paymentTransaction.findUnique({
+            where: { id: payment.id },
+            include: { order: true },
+          });
+        }
+      } catch (providerError) {
+        console.warn("MMQR status query failed; retaining the last known payment status.", providerError);
+      }
+    }
+    if (!payment) return res.status(404).json({ error: "Payment record not found." });
+    return res.json({
+      orderNumber: payment.order.orderNumber,
+      paymentStatus: payment.order.paymentStatus,
+      status: payment.status,
+      currency: payment.currency,
+      amount: payment.amount.toString(),
+      qrPayload: payment.qrPayload,
+      transactionRefId: payment.transactionRefId,
+      provider: payment.provider,
+    });
+  } catch (error) { return next(error); }
+});
+
+// MMPay's SDK verifies the signature and nonce before emitting the registered transaction events.
+app.post("/api/webhooks/mmpay", async (req, res) => {
+  if (!mmpayClient) return res.status(503).json({ error: "MMQR webhook is not configured." });
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  const nonce = req.header("x-mmpay-nonce");
+  const signature = req.header("x-mmpay-signature");
+  if (!rawBody || !nonce || !signature) return res.status(400).json({ error: "Missing raw payload or MMQR signature headers." });
+  try {
+    await mmpayClient.listen(rawBody.toString("utf8"), nonce, signature);
+    return res.status(200).json({ received: true });
+  } catch {
+    return res.status(401).json({ error: "MMQR callback signature or nonce verification failed." });
   }
 });
 
