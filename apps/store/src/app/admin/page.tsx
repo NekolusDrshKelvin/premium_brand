@@ -27,7 +27,7 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", category: "Bags", description: "", price: "100", inventory: "10", imageUrl: "", featured: false });
+  const [form, setForm] = useState({ name: "", slug: "", category: "Bags", description: "", price: "100", currency: "MMK", inventory: "10", imageUrl: "", featured: false });
 
   const loadData = useCallback(async () => {
     setError("");
@@ -91,11 +91,11 @@ export default function AdminDashboardPage() {
           slug: form.slug || form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
           price: Number(form.price),
           inventory: Number(form.inventory),
-          currency: "USD",
+          currency: form.currency,
           active: true,
         }),
       });
-      setForm({ name: "", slug: "", category: "Bags", description: "", price: "100", inventory: "10", imageUrl: "", featured: false });
+      setForm({ name: "", slug: "", category: "Bags", description: "", price: "100", currency: "MMK", inventory: "10", imageUrl: "", featured: false });
       setShowCreate(false);
       setNotice("Product created successfully.");
       await loadData();
@@ -112,6 +112,12 @@ export default function AdminDashboardPage() {
       setError("Price must be a positive number.");
       return;
     }
+    const nextCurrency = window.prompt(`Currency for ${product.name} (MMK or USD). Change the price separately; no conversion is performed.`, product.currency);
+    if (nextCurrency === null) return;
+    if (nextCurrency !== "MMK" && nextCurrency !== "USD") {
+      setError("Currency must be MMK or USD.");
+      return;
+    }
     const nextInventory = window.prompt(`Inventory quantity for ${product.name}`, String(product.inventory));
     if (nextInventory === null) return;
     const inventory = Number(nextInventory);
@@ -123,7 +129,7 @@ export default function AdminDashboardPage() {
     try {
       await apiRequest(`/api/admin/products/${product.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ price, inventory }),
+        body: JSON.stringify({ price, inventory, currency: nextCurrency }),
       });
       setNotice("Product price and inventory updated.");
       await loadData();
@@ -225,7 +231,8 @@ export default function AdminDashboardPage() {
               <Field label="Product name" value={form.name} onChange={(v) => { updateField("name",v); if (!form.slug) updateField("slug",v.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")); }} required/>
               <Field label="URL slug" value={form.slug} onChange={(v) => updateField("slug",v)} required/>
               <Field label="Category" value={form.category} onChange={(v) => updateField("category",v)} required/>
-              <Field label="Price (USD)" type="number" value={form.price} onChange={(v) => updateField("price",v)} required/>
+              <Field label={`Price (${form.currency})`} type="number" value={form.price} onChange={(v) => updateField("price",v)} required/>
+              <label className="block text-[10px] uppercase tracking-[.13em]">Currency<select value={form.currency} onChange={(e) => updateField("currency", e.target.value)} className="mt-2 w-full border border-black/15 bg-[#f5f1e9] px-3 py-3 text-sm normal-case tracking-normal outline-none focus:border-[#76533b]"><option value="MMK">MMK — Myanmar Kyat</option><option value="USD">USD — US Dollar</option></select></label>
               <Field label="Inventory quantity" type="number" value={form.inventory} onChange={(v) => updateField("inventory",v)} required/>
               <Field label="Image URL (https)" type="url" value={form.imageUrl} onChange={(v) => updateField("imageUrl",v)} required/>
               <label className="flex items-center gap-3 text-xs sm:col-span-2"><input type="checkbox" checked={form.featured} onChange={(e) => updateField("featured",e.target.checked)} className="h-4 w-4 accent-[#38271f]"/> Feature this product on the store</label>
@@ -236,7 +243,7 @@ export default function AdminDashboardPage() {
 
           {tab === "orders" && <>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-black/55">Review orders and update fulfillment status.</p><span className="eyebrow text-[#8b7764]">Latest 100 orders</span></div>
-            <div className="overflow-x-auto border border-black/10 bg-white/45"><table className="w-full min-w-[900px] text-left"><thead className="border-b border-black/10 bg-black/[.025]"><tr>{["Order","Customer","Date","Items","Total","Payment","Status"].map((heading) => <th key={heading} className="px-4 py-3 text-[9px] font-normal uppercase tracking-[.15em] text-black/50">{heading}</th>)}</tr></thead><tbody className="divide-y divide-black/10">{orders.map((order) => <tr key={order.id} className="align-top hover:bg-black/[.02]"><td className="px-4 py-4 text-xs">{order.orderNumber}</td><td className="px-4 py-4"><p className="text-xs">{order.customerName}</p><p className="mt-1 text-[10px] text-black/45">{order.customerEmail}</p></td><td className="px-4 py-4 text-xs text-black/60">{new Date(order.createdAt).toLocaleDateString()}</td><td className="max-w-[220px] px-4 py-4 text-xs text-black/60">{order.items.map((item) => `${item.productName} × ${item.quantity}`).join(", ")}</td><td className="px-4 py-4 text-xs">{money(order.total,order.currency)}</td><td className="px-4 py-4 text-[9px] uppercase tracking-[.08em]">{order.paymentMethod === "BANK_TRANSFER" ? "Bank transfer" : "Cash on delivery"}<p className="mt-1 text-black/40">{order.paymentStatus ?? "PENDING"}</p></td><td className="px-4 py-4"><div className="relative"><select aria-label={`Status for ${order.orderNumber}`} value={order.status} disabled={busy} onChange={(e) => void changeOrderStatus(order.id,e.target.value)} className="appearance-none border border-black/15 bg-[#f5f1e9] py-2 pl-2 pr-7 text-[9px] uppercase tracking-[.08em] outline-none focus:border-[#76533b]">{statuses.map((status) => <option key={status} value={status}>{status}</option>)}</select><ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"/></div></td></tr>)}</tbody></table>{orders.length === 0 && <p className="px-5 py-12 text-sm text-black/45">No orders received yet.</p>}</div>
+            <div className="overflow-x-auto border border-black/10 bg-white/45"><table className="w-full min-w-[900px] text-left"><thead className="border-b border-black/10 bg-black/[.025]"><tr>{["Order","Customer","Date","Items","Total","Payment","Status"].map((heading) => <th key={heading} className="px-4 py-3 text-[9px] font-normal uppercase tracking-[.15em] text-black/50">{heading}</th>)}</tr></thead><tbody className="divide-y divide-black/10">{orders.map((order) => <tr key={order.id} className="align-top hover:bg-black/[.02]"><td className="px-4 py-4 text-xs">{order.orderNumber}</td><td className="px-4 py-4"><p className="text-xs">{order.customerName}</p><p className="mt-1 text-[10px] text-black/45">{order.customerEmail}</p></td><td className="px-4 py-4 text-xs text-black/60">{new Date(order.createdAt).toLocaleDateString()}</td><td className="max-w-[220px] px-4 py-4 text-xs text-black/60">{order.items.map((item) => `${item.productName} × ${item.quantity}`).join(", ")}</td><td className="px-4 py-4 text-xs">{money(order.total,order.currency)}</td><td className="px-4 py-4 text-[9px] uppercase tracking-[.08em]">{order.paymentMethod === "BANK_TRANSFER" ? "Bank transfer" : order.paymentMethod === "MMQR" ? "MMQR" : "Cash on delivery"}<p className="mt-1 text-black/40">{order.paymentStatus ?? "PENDING"}</p></td><td className="px-4 py-4"><div className="relative"><select aria-label={`Status for ${order.orderNumber}`} value={order.status} disabled={busy} onChange={(e) => void changeOrderStatus(order.id,e.target.value)} className="appearance-none border border-black/15 bg-[#f5f1e9] py-2 pl-2 pr-7 text-[9px] uppercase tracking-[.08em] outline-none focus:border-[#76533b]">{statuses.map((status) => <option key={status} value={status}>{status}</option>)}</select><ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"/></div></td></tr>)}</tbody></table>{orders.length === 0 && <p className="px-5 py-12 text-sm text-black/45">No orders received yet.</p>}</div>
           </>}
           <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 py-5 text-[9px] uppercase tracking-[.12em] text-black/40"><span>ATELIER · Private workspace</span><span className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-green-700"/> Connected to API</span></footer>
         </div>
