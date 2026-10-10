@@ -2,11 +2,13 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, LoaderCircle, Minus, Plus, ShoppingBag } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LoaderCircle, Minus, Plus, ShoppingBag, RefreshCw } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { apiRequest, type Product } from "@/lib/api";
 
 type CartLine = { product: Product; quantity: number };
 type PlacedOrder = { orderNumber: string; total: string | number; currency: string; paymentMethod: string };
+type CreatedPayment = { provider: string; status: string; qrPayload: string | null; setupError?: boolean; transactionRefId?: string | null };
 
 const formatMoney = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
@@ -18,9 +20,11 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState<PlacedOrder | null>(null);
+  const [payment, setPayment] = useState<CreatedPayment | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
   const [form, setForm] = useState({
     customerName: "", customerEmail: "", customerPhone: "", shippingAddress: "", notes: "",
-    paymentMethod: "CASH_ON_DELIVERY" as "CASH_ON_DELIVERY" | "BANK_TRANSFER",
+    paymentMethod: "CASH_ON_DELIVERY" as "CASH_ON_DELIVERY" | "BANK_TRANSFER" | "MMQR",
   });
 
   useEffect(() => {
@@ -36,8 +40,34 @@ export default function CheckoutPage() {
     .filter((product) => (cart[product.id] ?? 0) > 0)
     .map((product) => ({ product, quantity: cart[product.id] })), [products, cart]);
   const subtotal = lines.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0);
-  const currency = lines[0]?.product.currency ?? "USD";
+  const currency = lines[0]?.product.currency ?? "MMK";
+  const mmqrEligible = lines.length > 0 && lines.every((line) => line.product.currency === "MMK");
   const canCheckout = lines.length > 0 && !busy && !loading;
+
+  useEffect(() => {
+    if (!order || order.paymentMethod !== "MMQR" || !payment || payment.status !== "PENDING") return;
+    let active = true;
+    const check = async () => {
+      if (!active) return;
+      setCheckingPayment(true);
+      try {
+        const result = await apiRequest<{
+          status: string;
+          paymentStatus: string;
+          qrPayload: string | null;
+          transactionRefId?: string | null;
+          provider: string;
+        }>(`/api/orders/${encodeURIComponent(order.orderNumber)}/payment?email=${encodeURIComponent(form.customerEmail)}`);
+        if (active) setPayment((current) => current ? { ...current, ...result, status: result.status, qrPayload: result.qrPayload } : current);
+      } catch {
+        // A temporary status-query failure should not change the last known payment state.
+      } finally {
+        if (active) setCheckingPayment(false);
+      }
+    };
+    const timer = setInterval(() => { void check(); }, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [order, payment?.status, form.customerEmail]);
 
   function changeQuantity(productId: string, delta: number) {
     setCart((current) => {
@@ -59,7 +89,7 @@ export default function CheckoutPage() {
     setBusy(true);
     setError("");
     try {
-      const result = await apiRequest<{ data: PlacedOrder }>("/api/orders", {
+      const result = await apiRequest<{ data: PlacedOrder; payment?: CreatedPayment; message?: string }>("/api/orders", {
         method: "POST",
         body: JSON.stringify({
           ...form,
@@ -67,6 +97,8 @@ export default function CheckoutPage() {
         }),
       });
       setOrder(result.data);
+      setPayment(result.payment ?? null);
+      setError(result.message ?? "");
       setCart({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "We could not place your order. Please try again.");
@@ -93,7 +125,16 @@ export default function CheckoutPage() {
             <h1 className="mt-4 font-serif text-4xl sm:text-5xl">Thank you, {form.customerName.split(" ")[0]}.</h1>
             <p className="mt-4 text-sm leading-6 text-black/55">Your order has been created. Keep this reference for your records.</p>
             <div className="my-8 border-y border-black/10 py-5"><p className="text-[10px] uppercase tracking-[.15em] text-black/45">Order reference</p><p className="mt-2 font-serif text-2xl">{order.orderNumber}</p><p className="mt-2 text-sm">{formatMoney(Number(order.total), order.currency)}</p></div>
-            {order.paymentMethod === "BANK_TRANSFER" ? (
+            {order.paymentMethod === "MMQR" && payment ? (
+              <div className="bg-[#ebe4d9] p-5 text-left">
+                <p className="text-xs font-medium">MMQR payment · {payment.status}</p>
+                {payment.qrPayload ? <div className="mt-4 flex flex-col items-center bg-white p-4"><QRCodeSVG value={payment.qrPayload} size={220} level="M" includeMargin/><p className="mt-3 text-center text-[10px] text-black/50">Scan this QR using a supported Myanmar bank or wallet app.</p></div> : <p className="mt-2 text-xs leading-5 text-black/60">A payment QR could not be confirmed by the provider. Your order is pending reconciliation. Please contact the store before creating another order.</p>}
+                <p className="mt-3 text-xs leading-5 text-black/60">{payment.status === "PAID" ? "Payment verified by the provider. Thank you." : payment.status === "FAILED" || payment.status === "EXPIRED" || payment.status === "CANCELLED" ? "This payment is not complete. Contact the store for assistance." : "Payment status is checked automatically. Keep this page open until the provider confirms payment."}</p>
+                {checkingPayment && <p className="mt-2 flex items-center gap-2 text-[10px] text-black/45"><RefreshCw size={12} className="animate-spin"/> Checking payment status…</p>}
+                {payment.transactionRefId && <p className="mt-2 text-[10px] text-black/45">Transaction reference: {payment.transactionRefId}</p>}
+                {error && <p className="mt-3 text-xs leading-5 text-amber-900">{error}</p>}
+              </div>
+            ) : order.paymentMethod === "BANK_TRANSFER" ? (
               <div className="bg-[#ebe4d9] p-5 text-left">
                 <p className="text-xs font-medium">Bank transfer selected</p>
                 <p className="mt-2 text-xs leading-5 text-black/60">Your order is pending payment. Please contact the store to receive verified bank details and payment instructions. Do not send funds to unverified account details.</p>
@@ -142,6 +183,8 @@ export default function CheckoutPage() {
                     <div className="border-t border-black/10 pt-5"><p className="text-[10px] uppercase tracking-[.15em]">Payment method</p>
                       <label className="mt-3 flex cursor-pointer items-start gap-3 border border-black/15 p-3.5"><input type="radio" name="paymentMethod" value="CASH_ON_DELIVERY" checked={form.paymentMethod === "CASH_ON_DELIVERY"} onChange={() => setForm((s) => ({ ...s, paymentMethod: "CASH_ON_DELIVERY" }))} className="mt-1 accent-[#38271f]"/><span><span className="block text-xs">Cash on delivery</span><span className="mt-1 block text-[10px] leading-4 text-black/50">Pay when your order arrives.</span></span></label>
                       <label className="mt-2 flex cursor-pointer items-start gap-3 border border-black/15 p-3.5"><input type="radio" name="paymentMethod" value="BANK_TRANSFER" checked={form.paymentMethod === "BANK_TRANSFER"} onChange={() => setForm((s) => ({ ...s, paymentMethod: "BANK_TRANSFER" }))} className="mt-1 accent-[#38271f]"/><span><span className="block text-xs">Bank transfer</span><span className="mt-1 block text-[10px] leading-4 text-black/50">The store will provide verified transfer instructions after reviewing your order.</span></span></label>
+                      <label className={`mt-2 flex items-start gap-3 border border-black/15 p-3.5 ${mmqrEligible ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}><input type="radio" name="paymentMethod" value="MMQR" checked={form.paymentMethod === "MMQR"} disabled={!mmqrEligible} onChange={() => setForm((s) => ({ ...s, paymentMethod: "MMQR" }))} className="mt-1 accent-[#38271f]"/><span><span className="block text-xs">MMQR · Myanmar QR</span><span className="mt-1 block text-[10px] leading-4 text-black/50">{mmqrEligible ? "Generate a dynamic QR and wait for server-verified payment confirmation." : "Available only when every selected product is priced in MMK."}</span></span></label>
+                      {!mmqrEligible && <p className="mt-2 text-[10px] leading-4 text-black/45">Your current catalog contains non-MMK products. Update product currency and prices in the admin catalog to enable MMQR. Prices are never automatically converted.</p>}
                     </div>
                     <div className="border-t border-black/10 pt-5"><div className="flex justify-between text-sm"><span className="text-black/55">Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-black/55">Shipping</span><span>{subtotal >= 150 ? "Complimentary" : "Calculated by store"}</span></div><p className="mt-4 text-[10px] leading-5 text-black/45">Shipping is currently not charged by the API. The final total is calculated server-side from the product prices and quantities.</p><div className="mt-5 flex items-center justify-between border-t border-black/10 pt-4"><span className="font-serif text-xl">Order total</span><span className="font-serif text-2xl">{formatMoney(subtotal, currency)}</span></div></div>
                     <button type="submit" disabled={!canCheckout} className="flex w-full items-center justify-between bg-[#38271f] px-5 py-4 text-[10px] uppercase tracking-[.16em] text-white transition hover:bg-[#76533b] disabled:cursor-not-allowed disabled:opacity-50"><span className="flex items-center gap-2">{busy ? <LoaderCircle size={15} className="animate-spin"/> : <ShoppingBag size={15}/>} {busy ? "Placing order…" : "Place order"}</span><span>{formatMoney(subtotal, currency)}</span></button>
