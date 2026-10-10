@@ -12,7 +12,7 @@ enum UserRole {
   ADMIN
 }
 
-enum OrderStatus {
+enum PaymentMethod {\n  CASH_ON_DELIVERY\n  BANK_TRANSFER\n}\n\nenum OrderStatus {
   PENDING
   CONFIRMED
   PROCESSING
@@ -60,7 +60,7 @@ model Order {
   customerEmail   String
   customerPhone   String?
   shippingAddress String
-  status          OrderStatus @default(PENDING)
+  status          OrderStatus @default(PENDING)\n  paymentMethod   PaymentMethod @default(CASH_ON_DELIVERY)\n  paymentStatus   String @default("PENDING")
   currency        String      @default("USD")
   subtotal        Decimal     @db.Decimal(10, 2)
   shippingFee     Decimal     @default(0) @db.Decimal(10, 2)
