@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: #f5f1e9; color: #27231f; font-family: Arial, Helvetica, sans-serif; }
+::selection { background: #76533b; color: #fffaf2; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; }
+.container-wide { width: min(1440px, calc(100% - 48px)); margin-inline: auto; }
+.eyebrow { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; }
+.hero-photo { background-image: linear-gradient(90deg, rgba(26,21,17,.57), rgba(26,21,17,.06)), url('https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=2200&q=90'); background-size: cover; background-position: center 42%; }
+.product-photo { background-size: cover; background-position: center; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.product-card:hover .product-photo { transform: scale(1.045); }
+.outline-button { border: 1px solid rgba(39,35,31,.48); transition: background .2s, color .2s, border-color .2s; }
+.outline-button:hover { background: #38271f; color: #f5f1e9; border-color: #38271f; }
