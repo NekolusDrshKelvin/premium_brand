@@ -40,7 +40,7 @@ export default function CheckoutPage() {
     .filter((product) => (cart[product.id] ?? 0) > 0)
     .map((product) => ({ product, quantity: cart[product.id] })), [products, cart]);
   const subtotal = lines.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0);
-  const currency = lines[0]?.product.currency ?? "MMK";
+  const currency = lines[0]?.product.currency ?? products[0]?.currency ?? "USD";
   const mmqrEligible = lines.length > 0 && lines.every((line) => line.product.currency === "MMK");
   const mixedCurrencies = new Set(lines.map((line) => line.product.currency)).size > 1;
   const canCheckout = lines.length > 0 && !busy && !loading;
@@ -133,7 +133,7 @@ export default function CheckoutPage() {
             {order.paymentMethod === "MMQR" && payment ? (
               <div className="bg-[#ebe4d9] p-5 text-left">
                 <p className="text-xs font-medium">MMQR payment · {payment.status}</p>
-                {payment.qrPayload ? <div className="mt-4 flex flex-col items-center bg-white p-4"><QRCodeSVG value={payment.qrPayload} size={220} level="M" includeMargin/><p className="mt-3 text-center text-[10px] text-black/50">Scan this QR using a supported Myanmar bank or wallet app.</p></div> : <p className="mt-2 text-xs leading-5 text-black/60">A payment QR could not be confirmed by the provider. Your order is pending reconciliation. Please contact the store before creating another order.</p>}
+                {payment.qrPayload ? <div className="mt-4 flex flex-col items-center bg-white p-4"><QRCodeSVG value={payment.qrPayload} size={220} level="M" includeMargin/><p className="mt-3 text-center text-[10px] text-black/50">Scan this QR using a supported Myanmar bank or wallet app.</p></div> : <p className="mt-2 text-xs leading-5 text-black/60">{payment.status === "FAILED" ? "The provider reported that payment initialization failed. Contact the store before retrying." : "A payment QR could not be confirmed by the provider. Your order is pending reconciliation. Please contact the store before creating another order."}</p>}
                 <p className="mt-3 text-xs leading-5 text-black/60">{payment.status === "PAID" ? "Payment verified by the provider. Thank you." : payment.status === "FAILED" || payment.status === "EXPIRED" || payment.status === "CANCELLED" ? "This payment is not complete. Contact the store for assistance." : "Payment status is checked automatically. Keep this page open until the provider confirms payment."}</p>
                 {checkingPayment && <p className="mt-2 flex items-center gap-2 text-[10px] text-black/45"><RefreshCw size={12} className="animate-spin"/> Checking payment status…</p>}
                 {payment.transactionRefId && <p className="mt-2 text-[10px] text-black/45">Transaction reference: {payment.transactionRefId}</p>}
