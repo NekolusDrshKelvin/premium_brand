@@ -33,7 +33,7 @@ export function createMmpayClient(env: NodeJS.ProcessEnv = process.env) {
   const mode = env.MMPAY_MODE === "live" ? "live" : "sandbox";
   const apiBaseUrl = env.MMPAY_API_BASE_URL?.trim() ||
     (mode === "live" ? "https://api.myanmyanpay.com" : "https://sandbox.myanmyanpay.com");
-  return new MMPaySDK({
+  return MMPaySDK({
     appId: env.MMPAY_APP_ID!.trim(),
     publishableKey: env.MMPAY_PUBLISHABLE_KEY!.trim(),
     secretKey: env.MMPAY_SECRET_KEY!.trim(),
