@@ -438,6 +438,25 @@ app.post("/api/orders", async (req, res, next) => {
         items,
       });
       if (
+        gatewayResponse &&
+        gatewayResponse.orderId === order.orderNumber &&
+        gatewayResponse.amount === amount &&
+        gatewayResponse.currency === "MMK" &&
+        gatewayResponse.status === "FAILED"
+      ) {
+        await applyMmpayTransaction({
+          orderId: gatewayResponse.orderId,
+          amount: gatewayResponse.amount,
+          currency: gatewayResponse.currency,
+          status: "FAILED",
+        });
+        return res.status(201).json({
+          data: order,
+          payment: { provider: "MYANMYANPAY", status: "FAILED", qrPayload: null },
+          message: "The provider reported that MMQR payment initialization failed. Contact the store before retrying.",
+        });
+      }
+      if (
         !gatewayResponse ||
         gatewayResponse.orderId !== order.orderNumber ||
         gatewayResponse.amount !== amount ||
