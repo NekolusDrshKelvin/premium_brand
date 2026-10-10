@@ -71,5 +71,6 @@ export function validateMmpayTransaction(
     transaction.amount === expected.amount &&
     typeof transaction.currency === "string" &&
     transaction.currency.toUpperCase() === expected.currency.toUpperCase() &&
-    normalizeMmpayStatus(transaction.status) !== null;
+    normalizeMmpayStatus(transaction.status) !== null &&
+    (transaction.status !== "SUCCESS" || (typeof transaction.transactionRefId === "string" && transaction.transactionRefId.trim().length > 0));
 }
