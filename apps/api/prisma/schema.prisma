@@ -15,6 +15,7 @@ enum UserRole {
 enum PaymentMethod {
   CASH_ON_DELIVERY
   BANK_TRANSFER
+  MMQR
 }
 
 enum OrderStatus {
@@ -75,6 +76,7 @@ model Order {
   notes           String?
   user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   items           OrderItem[]
+  paymentTransactions PaymentTransaction[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -94,4 +96,25 @@ model OrderItem {
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+}
+
+model PaymentTransaction {
+  id                String   @id @default(cuid())
+  orderId           String
+  provider          String   @default("MMPAY")
+  providerOrderId   String   @unique
+  amount            Decimal  @db.Decimal(10, 2)
+  currency          String
+  status            String   @default("PENDING")
+  qrPayload         String?  @db.Text
+  transactionRefId  String?  @unique
+  vendorQrRefId     String?
+  vendor            String?
+  method            String?
+  callbackReceivedAt DateTime?
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId, status])
 }
