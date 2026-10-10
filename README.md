@@ -75,7 +75,7 @@ Open http://localhost:3000/admin/login and sign in using the `ADMIN_EMAIL` and `
 The dashboard includes:
 - Overview metrics, recent orders, and low-stock alerts.
 - Create products, edit price/stock, and archive products.
-- Customer checkout with stock validation, server-calculated totals, cash-on-delivery and bank-transfer selection.
+- Customer checkout with stock validation, server-calculated totals, cash-on-delivery, bank transfer, and an MMQR integration path with signed callback verification and status tracking.
 - Checkout payload validation tests and GitHub Actions CI for API typecheck/tests and storefront typecheck/build.
 - Review orders and update fulfillment status.
 - Sign out and role-checked dashboard access.
@@ -100,8 +100,12 @@ Admin accounts are created from the server-side seed configuration. Public regis
 - `PATCH /api/admin/orders/:id/status` (ADMIN)
 
 ## Automated checks\n\nFrom `apps/api`: `npm run typecheck` and `npm test`. From `apps/store`: `npm run typecheck` and `npm run build`. GitHub Actions runs these checks on pushes and pull requests to `main`. The CI workflow has been added to the repository, but its first run must complete before the build/test status can be confirmed.\n\n## Important production limitations
-This is an in-progress starter, not a finished production ecommerce platform. The storefront's public product cards are still static, and the customer cart/checkout UI, password reset, payment provider integration, email notifications, audit logs, automated tests, and deployment configuration need further implementation and verification. Do not use for real customer payments until those controls are completed.
+This is an in-progress starter, not a finished production ecommerce platform. The storefront is still an in-progress starter. MMQR integration code is present but has not been verified against provider sandbox/live credentials or a real payment. Do not claim payment processing works until sandbox transactions, callback signatures, status reconciliation, and CI all pass. Email notifications, password reset, audit logs, deployment hardening, and production reconciliation procedures remain outstanding.
 
 ## Documentation
 - [Architecture](docs/architecture.md)
 - [Deployment guide](docs/deployment.md)
+
+
+## MMQR payment integration
+See [MMQR integration and launch checklist](docs/payment-mmqr.md) for provider onboarding, server-only credentials, migration commands, MMK catalog requirements, callback verification, and launch testing. Existing sample products are USD-priced; update their prices and currency intentionally in Admin before MMQR checkout is enabled. No currency conversion is performed automatically.
