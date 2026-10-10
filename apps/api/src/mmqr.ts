@@ -50,6 +50,7 @@ export function normalizeMmpayStatus(status: unknown): InternalPaymentStatus | n
     case "REFUNDED": return "REFUNDED";
     case "CANCELLED": return "CANCELLED";
     case "EXPIRED": return "EXPIRED";
+    default: return null;
   }
 }
 
