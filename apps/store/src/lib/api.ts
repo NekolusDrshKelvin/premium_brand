@@ -54,6 +54,8 @@ export type StoreOrder = {
   customerName: string;
   customerEmail: string;
   status: "PENDING" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  paymentMethod?: "CASH_ON_DELIVERY" | "BANK_TRANSFER";
+  paymentStatus?: string;
   total: string | number;
   currency: string;
   createdAt: string;
