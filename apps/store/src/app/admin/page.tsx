@@ -104,6 +104,36 @@ export default function AdminDashboardPage() {
     finally { setBusy(false); }
   }
 
+  async function editProduct(product: Product) {
+    const nextPrice = window.prompt(`Price in ${product.currency} for ${product.name}`, String(product.price));
+    if (nextPrice === null) return;
+    const price = Number(nextPrice);
+    if (!Number.isFinite(price) || price <= 0) {
+      setError("Price must be a positive number.");
+      return;
+    }
+    const nextInventory = window.prompt(`Inventory quantity for ${product.name}`, String(product.inventory));
+    if (nextInventory === null) return;
+    const inventory = Number(nextInventory);
+    if (!Number.isInteger(inventory) || inventory < 0) {
+      setError("Inventory must be a whole number of zero or more.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest(`/api/admin/products/${product.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ price, inventory }),
+      });
+      setNotice("Product price and inventory updated.");
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update product.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function archiveProduct(product: Product) {
     if (!window.confirm(`Archive "${product.name}"? It will no longer appear in the public store.`)) return;
     setBusy(true); setError(""); setNotice("");
@@ -201,7 +231,7 @@ export default function AdminDashboardPage() {
               <label className="flex items-center gap-3 text-xs sm:col-span-2"><input type="checkbox" checked={form.featured} onChange={(e) => updateField("featured",e.target.checked)} className="h-4 w-4 accent-[#38271f]"/> Feature this product on the store</label>
               <label className="text-[10px] uppercase tracking-[.13em] sm:col-span-2 xl:col-span-3">Description<textarea required minLength={5} maxLength={4000} value={form.description} onChange={(e) => updateField("description",e.target.value)} rows={3} className="mt-2 w-full border border-black/15 bg-transparent px-3 py-3 text-sm normal-case tracking-normal outline-none focus:border-[#76533b]"/></label>
             </div><button disabled={busy} className="mt-5 flex items-center gap-2 bg-[#38271f] px-5 py-3 text-[10px] uppercase tracking-[.15em] text-white disabled:opacity-50">{busy ? <LoaderCircle className="animate-spin" size={14}/> : <Check size={14}/>} Save product</button></form>}
-            <div className="overflow-x-auto border border-black/10 bg-white/45"><table className="w-full min-w-[760px] text-left"><thead className="border-b border-black/10 bg-black/[.025]"><tr>{["Product","Category","Price","Stock","Status","Action"].map((heading) => <th key={heading} className="px-4 py-3 text-[9px] font-normal uppercase tracking-[.15em] text-black/50">{heading}</th>)}</tr></thead><tbody className="divide-y divide-black/10">{products.map((product) => <tr key={product.id} className="hover:bg-black/[.02]"><td className="px-4 py-4"><div className="flex items-center gap-3"><div className="h-12 w-10 shrink-0 bg-cover bg-center" style={{backgroundImage:`url('${product.imageUrl}')`}}/><div><p className="text-xs">{product.name}</p><p className="mt-1 text-[10px] text-black/40">{product.slug}</p></div></div></td><td className="px-4 py-4 text-xs text-black/60">{product.category}</td><td className="px-4 py-4 text-xs">{money(product.price,product.currency)}</td><td className="px-4 py-4 text-xs">{product.inventory}</td><td className="px-4 py-4"><span className={`text-[9px] uppercase tracking-[.12em] ${product.active ? "text-green-800" : "text-black/35"}`}>{product.active ? "Active" : "Archived"}</span></td><td className="px-4 py-4">{product.active && <button disabled={busy} onClick={() => void archiveProduct(product)} className="border border-black/15 px-3 py-2 text-[9px] uppercase tracking-[.1em] transition hover:border-red-900/30 hover:text-red-900 disabled:opacity-50">Archive</button>}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto border border-black/10 bg-white/45"><table className="w-full min-w-[760px] text-left"><thead className="border-b border-black/10 bg-black/[.025]"><tr>{["Product","Category","Price","Stock","Status","Action"].map((heading) => <th key={heading} className="px-4 py-3 text-[9px] font-normal uppercase tracking-[.15em] text-black/50">{heading}</th>)}</tr></thead><tbody className="divide-y divide-black/10">{products.map((product) => <tr key={product.id} className="hover:bg-black/[.02]"><td className="px-4 py-4"><div className="flex items-center gap-3"><div className="h-12 w-10 shrink-0 bg-cover bg-center" style={{backgroundImage:`url('${product.imageUrl}')`}}/><div><p className="text-xs">{product.name}</p><p className="mt-1 text-[10px] text-black/40">{product.slug}</p></div></div></td><td className="px-4 py-4 text-xs text-black/60">{product.category}</td><td className="px-4 py-4 text-xs">{money(product.price,product.currency)}</td><td className="px-4 py-4 text-xs">{product.inventory}</td><td className="px-4 py-4"><span className={`text-[9px] uppercase tracking-[.12em] ${product.active ? "text-green-800" : "text-black/35"}`}>{product.active ? "Active" : "Archived"}</span></td><td className="px-4 py-4"><div className="flex gap-2">{product.active && <><button disabled={busy} onClick={() => void editProduct(product)} className="border border-black/15 px-3 py-2 text-[9px] uppercase tracking-[.1em] transition hover:bg-black/5 disabled:opacity-50">Edit</button><button disabled={busy} onClick={() => void archiveProduct(product)} className="border border-black/15 px-3 py-2 text-[9px] uppercase tracking-[.1em] transition hover:border-red-900/30 hover:text-red-900 disabled:opacity-50">Archive</button></>}</div></td></tr>)}</tbody></table></div>
           </>}
 
           {tab === "orders" && <>
