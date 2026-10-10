@@ -4,7 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { OrderStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
+import { OrderStatus, PaymentMethod, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { z } from "zod";
 
 const app = express();
@@ -105,6 +105,7 @@ const checkoutSchema = z.object({
   customerPhone: z.string().trim().max(40).optional(),
   shippingAddress: z.string().trim().min(8).max(600),
   notes: z.string().trim().max(1000).optional(),
+  paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.CASH_ON_DELIVERY),
   items: z.array(z.object({
     productId: z.string().min(1),
     quantity: z.number().int().min(1).max(20),
@@ -333,6 +334,8 @@ app.post("/api/orders", async (req, res, next) => {
           customerPhone: input.customerPhone,
           shippingAddress: input.shippingAddress,
           notes: input.notes,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: "PENDING",
           currency: products[0]?.currency ?? "USD",
           subtotal,
           shippingFee,
