@@ -42,6 +42,7 @@ export default function CheckoutPage() {
   const subtotal = lines.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0);
   const currency = lines[0]?.product.currency ?? "MMK";
   const mmqrEligible = lines.length > 0 && lines.every((line) => line.product.currency === "MMK");
+  const mixedCurrencies = new Set(lines.map((line) => line.product.currency)).size > 1;
   const canCheckout = lines.length > 0 && !busy && !loading;
 
   useEffect(() => {
@@ -80,6 +81,10 @@ export default function CheckoutPage() {
     event.preventDefault();
     if (!lines.length) {
       setError("Please add at least one item to your bag.");
+      return;
+    }
+    if (mixedCurrencies) {
+      setError("Please select products with the same currency. Mixed-currency totals are not supported.");
       return;
     }
     if (lines.some((line) => line.quantity > line.product.inventory)) {
