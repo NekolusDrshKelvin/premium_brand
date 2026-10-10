@@ -387,7 +387,7 @@ app.post("/api/orders", async (req, res, next) => {
         if (changed.count !== 1) throw new Error("CHECKOUT_STOCK_CHANGED");
       }
       const shippingFee = new Prisma.Decimal(0);
-      const orderNumber = `AT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+      const orderNumber = `AT-${randomUUID().replace(/-/g, "").slice(0, 24).toUpperCase()}`;
       return tx.order.create({
         data: {
           orderNumber,
