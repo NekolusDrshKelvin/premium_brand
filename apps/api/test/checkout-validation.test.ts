@@ -43,3 +43,9 @@ test("rejects short shipping addresses and invalid payment methods", () => {
   assert.equal(checkoutPayloadSchema.safeParse({ ...validPayload, shippingAddress: "short" }).success, false);
   assert.equal(checkoutPayloadSchema.safeParse({ ...validPayload, paymentMethod: "WIRE_CASH" }).success, false);
 });
+
+
+test("accepts MMQR as a checkout payment method", () => {
+  const result = checkoutPayloadSchema.safeParse({ ...validPayload, paymentMethod: "MMQR" });
+  assert.equal(result.success, true);
+});
