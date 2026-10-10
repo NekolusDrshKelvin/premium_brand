@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: premium-brand-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: premium_brand
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - premium_brand_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d premium_brand"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  premium_brand_data:
