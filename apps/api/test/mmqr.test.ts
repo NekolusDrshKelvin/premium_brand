@@ -32,3 +32,10 @@ test("requires matching order id, exact amount, currency, and known provider sta
   assert.equal(validateMmpayTransaction({ ...expected, status: "PENDING" }, expected), true);
   assert.equal(validateMmpayTransaction({ ...expected, status: "FORGED" }, expected), false);
 });
+
+
+test("does not mark a success transaction paid without a provider transaction reference", () => {
+  const expected = { orderId: "AT-ORDER-123", amount: 125000, currency: "MMK" };
+  assert.equal(validateMmpayTransaction({ ...expected, status: "SUCCESS" }, expected), false);
+  assert.equal(validateMmpayTransaction({ ...expected, status: "SUCCESS", transactionRefId: "provider-ref-1" }, expected), true);
+});
