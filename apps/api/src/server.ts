@@ -515,7 +515,11 @@ app.post("/api/webhooks/mmpay", async (req, res) => {
   const signature = req.header("x-mmpay-signature");
   if (!rawBody || !nonce || !signature) return res.status(400).json({ error: "Missing raw payload or MMQR signature headers." });
   try {
-    await mmpayClient.listen(rawBody.toString("utf8"), nonce, signature);
+    const rawPayload = rawBody.toString("utf8");
+    await mmpayClient.listen(rawPayload, nonce, signature);
+    const transaction = JSON.parse(rawPayload) as MmpayTransaction;
+    const accepted = await applyMmpayTransaction(transaction);
+    if (!accepted) return res.status(400).json({ error: "MMQR callback did not match a pending payment." });
     return res.status(200).json({ received: true });
   } catch {
     return res.status(401).json({ error: "MMQR callback signature or nonce verification failed." });
