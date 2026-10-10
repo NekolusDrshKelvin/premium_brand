@@ -64,7 +64,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
     (req as AuthRequest).user = user;
     return next();
   } catch {
-    res.clearCookie(authCookie, authCookieOptions());
+    res.clearCookie(authCookie, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" });
     return res.status(401).json({ error: "Your session has expired. Please sign in again." });
   }
 }
