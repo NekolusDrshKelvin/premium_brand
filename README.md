@@ -75,6 +75,8 @@ Open http://localhost:3000/admin/login and sign in using the `ADMIN_EMAIL` and `
 The dashboard includes:
 - Overview metrics, recent orders, and low-stock alerts.
 - Create products, edit price/stock, and archive products.
+- Customer checkout with stock validation, server-calculated totals, cash-on-delivery and bank-transfer selection.
+- Checkout payload validation tests and GitHub Actions CI for API typecheck/tests and storefront typecheck/build.
 - Review orders and update fulfillment status.
 - Sign out and role-checked dashboard access.
 
@@ -97,7 +99,7 @@ Admin accounts are created from the server-side seed configuration. Public regis
 - `GET /api/admin/orders` (ADMIN)
 - `PATCH /api/admin/orders/:id/status` (ADMIN)
 
-## Important production limitations
+## Automated checks\n\nFrom `apps/api`: `npm run typecheck` and `npm test`. From `apps/store`: `npm run typecheck` and `npm run build`. GitHub Actions runs these checks on pushes and pull requests to `main`. The CI workflow has been added to the repository, but its first run must complete before the build/test status can be confirmed.\n\n## Important production limitations
 This is an in-progress starter, not a finished production ecommerce platform. The storefront's public product cards are still static, and the customer cart/checkout UI, password reset, payment provider integration, email notifications, audit logs, automated tests, and deployment configuration need further implementation and verification. Do not use for real customer payments until those controls are completed.
 
 ## Documentation
