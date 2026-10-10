@@ -468,13 +468,14 @@ app.post("/api/orders", async (req, res, next) => {
         throw new Error("MMQR provider response did not match the order amount, currency, ID, or expected status.");
       }
       if (gatewayResponse.status === "SUCCESS") {
-        await applyMmpayTransaction({
+        const accepted = await applyMmpayTransaction({
           orderId: gatewayResponse.orderId,
           amount: gatewayResponse.amount,
           currency: gatewayResponse.currency,
           status: "SUCCESS",
           transactionRefId: gatewayResponse.transactionRefId,
         });
+        if (!accepted) throw new Error("MMQR provider reported success without a verifiable transaction reference.");
       }
       const updatedPayment = await prisma.paymentTransaction.update({
         where: { id: payment.id },
