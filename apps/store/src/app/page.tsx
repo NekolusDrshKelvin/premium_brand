@@ -1,3 +1,5 @@
+"use client";
+
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Menu, MoveUpRight } from "lucide-react";
 
 const products = [
