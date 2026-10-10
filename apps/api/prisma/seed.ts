@@ -1,4 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaClient, UserRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -54,6 +56,30 @@ async function main() {
     });
   }
   console.log(`Seeded ${products.length} products`);
+
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
+  if (email && password) {
+    if (password.length < 12) throw new Error("ADMIN_PASSWORD must contain at least 12 characters.");
+    const passwordHash = await bcrypt.hash(password, 12);
+    await prisma.user.upsert({
+      where: { email },
+      update: {
+        name: process.env.ADMIN_NAME?.trim() || "Store Administrator",
+        passwordHash,
+        role: UserRole.ADMIN,
+      },
+      create: {
+        name: process.env.ADMIN_NAME?.trim() || "Store Administrator",
+        email,
+        passwordHash,
+        role: UserRole.ADMIN,
+      },
+    });
+    console.log(`Admin account provisioned for ${email}. Keep the password private.`);
+  } else {
+    console.log("Admin account not provisioned. Set ADMIN_EMAIL and ADMIN_PASSWORD in apps/api/.env, then run npm run db:seed.");
+  }
 }
 
 main()
