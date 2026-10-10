@@ -450,9 +450,10 @@ app.post("/api/orders", async (req, res, next) => {
       // Keep the order and stock reservation pending if the provider timed out: the gateway may have
       // accepted the request before the network failed. Reconcile through the provider/admin before retrying.
       console.error("MMQR payment creation did not return a confirmed QR response for order", order.orderNumber, gatewayError);
-      return res.status(502).json({
-        error: "The MMQR provider did not confirm QR creation. Your order is pending reconciliation; please contact the store before retrying.",
-        orderNumber: order.orderNumber,
+      return res.status(201).json({
+        data: order,
+        payment: { provider: "MYANMYANPAY", status: "PENDING", qrPayload: null, setupError: true },
+        message: "Order created, but QR creation was not confirmed. Contact the store before retrying; do not submit a duplicate order.",
       });
     }
   } catch (error) {
