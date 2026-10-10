@@ -437,8 +437,25 @@ app.post("/api/orders", async (req, res, next) => {
         customMessage: `Order ${order.orderNumber}`.slice(0, 150),
         items,
       });
-      if (!gatewayResponse || typeof gatewayResponse.qr !== "string" || gatewayResponse.qr.length < 10) {
-        throw new Error("MMQR provider did not return a usable QR payload.");
+      if (
+        !gatewayResponse ||
+        gatewayResponse.orderId !== order.orderNumber ||
+        gatewayResponse.amount !== amount ||
+        gatewayResponse.currency !== "MMK" ||
+        typeof gatewayResponse.qr !== "string" ||
+        gatewayResponse.qr.length < 10 ||
+        !["PENDING", "SUCCESS"].includes(gatewayResponse.status)
+      ) {
+        throw new Error("MMQR provider response did not match the order amount, currency, ID, or expected status.");
+      }
+      if (gatewayResponse.status === "SUCCESS") {
+        await applyMmpayTransaction({
+          orderId: gatewayResponse.orderId,
+          amount: gatewayResponse.amount,
+          currency: gatewayResponse.currency,
+          status: "SUCCESS",
+          transactionRefId: gatewayResponse.transactionRefId,
+        });
       }
       const updatedPayment = await prisma.paymentTransaction.update({
         where: { id: payment.id },
