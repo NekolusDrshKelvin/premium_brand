@@ -65,7 +65,7 @@ Visit `http://localhost:3000`, then sign in at `http://localhost:3000/admin/logi
 - `POST /api/orders`
 - Admin-only: `GET /api/admin/overview`, `GET/POST /api/admin/products`, `PATCH/DELETE /api/admin/products/:id`, `GET /api/admin/orders`, `PATCH /api/admin/orders/:id/status`
 
-Checkout reads prices from the database and adjusts inventory transactionally. It does not collect or process payment details.
+Checkout reads prices from the database and adjusts inventory transactionally. It records cash-on-delivery or bank-transfer selection, but does not collect or process card/e-wallet payments. Bank transfer must be verified manually before marking an order paid. Integrate a chosen provider with signed webhook/callback verification before accepting online payments.
 
 ## Production checklist
 - Use a managed PostgreSQL database, strong unique secrets, HTTPS, backups, monitoring, and least-privilege database credentials.
@@ -80,3 +80,8 @@ Checkout reads prices from the database and adjusts inventory transactionally. I
 - Run typechecks, automated tests, and production builds before release.
 
 The current repository is a development foundation and must be security-reviewed and tested before handling real customer data or payments.
+
+
+## Automated checks
+
+From `apps/api`, run `npm run typecheck` and `npm test`. From `apps/store`, run `npm run typecheck` and `npm run build`. GitHub Actions runs these checks for pushes and pull requests to `main`. Wait for the first workflow run to complete to confirm its result.
