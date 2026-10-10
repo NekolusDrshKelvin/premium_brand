@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Menu, MoveUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Menu, MoveUpRight, ShoppingBag } from "lucide-react";
+import Link from "next/link";
 
 const products = [
   { name: "The Everyday Tote", category: "Full-grain leather · Cognac", price: "$285", tag: "Bestseller", image: "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=900&q=85", tone: "bg-[#e2d6c7]" },
@@ -31,7 +32,7 @@ export default function HomePage() {
           <div className="absolute left-1/2 -translate-x-1/2"><Wordmark /></div>
           <div className="flex items-center gap-5 text-[10px] uppercase tracking-[.15em]">
             <a href="#newsletter" className="hidden hover:opacity-50 sm:block">Journal</a>
-            <a href="#collection" className="flex items-center gap-2">Bag <span className="flex h-5 w-5 items-center justify-center rounded-full border border-black/20 text-[9px]">0</span></a>
+            <Link href="/checkout" className="flex items-center gap-2">Bag <span className="flex h-5 w-5 items-center justify-center rounded-full border border-black/20 text-[9px]"><ShoppingBag size={11}/></span></Link>
           </div>
         </div>
       </header>
