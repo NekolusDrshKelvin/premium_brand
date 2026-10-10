@@ -373,6 +373,7 @@ app.post("/api/orders", async (req, res, next) => {
         subtotal = subtotal.add(lineTotal);
         orderItems.push({ product: { connect: { id: product.id } }, productName: product.name, unitPrice: product.price, quantity, lineTotal });
       }
+      if (new Set(products.map((product) => product.currency)).size > 1) throw new Error("CHECKOUT_MIXED_CURRENCIES");
       if (input.paymentMethod === PaymentMethod.MMQR) {
         if (products.some((product) => product.currency !== "MMK")) throw new Error("CHECKOUT_MMQR_REQUIRES_MMK");
         if (!Number.isInteger(Number(subtotal.toString()))) throw new Error("CHECKOUT_MMQR_INTEGER_AMOUNT");
@@ -458,6 +459,7 @@ app.post("/api/orders", async (req, res, next) => {
     }
   } catch (error) {
     if (error instanceof Error && error.message === "CHECKOUT_PRODUCT_NOT_FOUND") return res.status(400).json({ error: "One or more products are unavailable." });
+    if (error instanceof Error && error.message === "CHECKOUT_MIXED_CURRENCIES") return res.status(400).json({ error: "Please select products with the same currency. Mixed-currency totals are not supported." });
     if (error instanceof Error && error.message === "CHECKOUT_MMQR_REQUIRES_MMK") return res.status(400).json({ error: "MMQR checkout requires all selected products to be priced in MMK. Update product currency and prices in the admin catalog first." });
     if (error instanceof Error && error.message === "CHECKOUT_MMQR_INTEGER_AMOUNT") return res.status(400).json({ error: "MMQR checkout requires a whole-number MMK total." });
     if (error instanceof Error && (error.message.startsWith("CHECKOUT_STOCK:") || error.message === "CHECKOUT_STOCK_CHANGED")) return res.status(409).json({ error: "Insufficient stock for one or more items." });
